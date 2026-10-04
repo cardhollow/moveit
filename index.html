@@ -1,0 +1,2481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MOVE IT</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --panel: #f5f5f5;
+      --panel2: #ececec;
+      --line: #2b2b2b;
+      --text: #111;
+      --muted: #666;
+      --shadow: 0 0 0 1px #c8c8c8;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--sans); color: var(--text); background: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* Top Navigation Header */
+    header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0.75rem 1.5rem; border-bottom: 2px solid var(--line); background: var(--bg); z-index: 10;
+    }
+    .logo-area h1 { font-size: 1.25rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; }
+    .mode-toggle { display: flex; gap: 0.5rem; background: var(--panel2); padding: 0.25rem; border-radius: 6px; border: 1px solid #c8c8c8; }
+    .mode-btn {
+      padding: 0.5rem 1rem; border: none; background: transparent; font-weight: 600; font-size: 0.85rem;
+      cursor: pointer; border-radius: 4px; transition: all 0.2s;
+    }
+    .mode-btn.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+
+    /* Layout Split */
+    .main-container { display: flex; flex: 1; overflow: hidden; width: 100%; position: relative; }
+    
+    /* Left Panel (Grid/World view) */
+    .left-panel {
+      width: 420px; min-width: 360px; border-right: 2px solid var(--line);
+      background: var(--panel); display: flex; flex-direction: column; padding: 1rem; gap: 1rem; overflow-y: auto;
+    }
+    .canvas-container {
+      width: 100%; aspect-ratio: 1; background: var(--bg); border: 2px solid var(--line);
+      border-radius: 6px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); position: relative;
+    }
+    canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+    
+    .runtime-controls { display: flex; gap: 0.5rem; }
+    .btn {
+      flex: 1; padding: 0.6rem; border: 2px solid var(--line); background: var(--bg);
+      font-weight: 700; font-size: 0.85rem; text-transform: uppercase; cursor: pointer; border-radius: 4px;
+      transition: transform 0.1s, background-color 0.2s;
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn-primary { background: var(--text); color: var(--bg); }
+    .btn-danger { background: #ef4444; color: white; border-color: #dc2626; }
+
+    /* Right Panel (Workspace & Config Panels) */
+    .right-panel { flex: 1; display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
+    
+    /* UI Screens */
+    .screen { display: none; flex: 1; overflow: hidden; }
+    .screen.active { display: flex; }
+
+    /* Gameplay Mode Layout Structure */
+    .gameplay-layout { width: 100%; height: 100%; display: flex; flex-direction: column; }
+    .workspace-title { padding: 0.75rem 1.25rem; background: var(--panel); border-bottom: 1px solid var(--line); font-weight: 700; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.05em; display: flex; justify-content: space-between; }
+    
+    .coding-workspace {
+      flex: 1; padding: 1.5rem; background: #fafafa; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 0.5rem; align-content: flex-start; position: relative;
+    }
+    .coding-workspace.drag-over { background: #f0f7ff; border: 2px dashed var(--accent); }
+    .workspace-empty-hint {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      color: var(--muted); font-size: 0.9rem; pointer-events: none; text-align: center; line-height: 1.4;
+    }
+
+    .palette-container {
+      height: 240px; border-top: 2px solid var(--line); background: var(--panel);
+      display: flex; flex-direction: column;
+    }
+    .palette-header { padding: 0.5rem 1rem; border-bottom: 1px solid #c8c8c8; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; color: var(--muted); }
+    .palette-blocks { flex: 1; padding: 1rem; display: flex; gap: 0.75rem; flex-wrap: wrap; overflow-y: auto; align-content: flex-start; }
+
+    /* Visual Blocks styling */
+    .block {
+      background: var(--bg); border: 2px solid var(--line); border-radius: 6px;
+      padding: 0.5rem 0.75rem; display: inline-flex; flex-direction: column; gap: 0.35rem;
+      cursor: grab; user-select: none; font-size: 0.85rem; font-weight: 700; min-width: 145px;
+      position: relative; box-shadow: 0 2px 0 var(--line); margin-bottom: 2px;
+    }
+    .block:active { cursor: grabbing; }
+    .block-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .block-qty { font-size: 0.7rem; background: rgba(0,0,0,0.1); padding: 0.1rem 0.3rem; border-radius: 3px; }
+    .block select {
+      width: 100%; padding: 0.2rem; font-size: 0.8rem; font-family: var(--sans);
+      border: 1px solid var(--line); border-radius: 4px; background: var(--bg); font-weight: 600;
+    }
+    .block-slot {
+      border: 2px dashed #c8c8c8; border-radius: 4px; min-height: 50px; background: rgba(0,0,0,0.02);
+      padding: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem;
+    }
+    .block-slot.drag-over { background: rgba(37, 99, 235, 0.1); border-color: var(--accent); }
+
+    /* Editor Mode Layout Structure */
+    .editor-layout { width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+    .editor-tabs { display: flex; background: var(--panel); border-bottom: 1px solid var(--line); }
+    .tab-btn {
+      padding: 0.75rem 1.25rem; border: none; background: transparent; font-weight: 700;
+      font-size: 0.85rem; cursor: pointer; border-right: 1px solid #c8c8c8; text-transform: uppercase;
+    }
+    .tab-btn.active { background: var(--bg); border-bottom: 2px solid var(--bg); margin-bottom: -1px; }
+    .tab-content { flex: 1; display: none; padding: 1.5rem; overflow-y: auto; }
+    .tab-content.active { display: block; }
+
+    /* UI Forms & Layout Panels inside Editor */
+    .editor-grid-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 700; text-transform: uppercase; margin-bottom: 0.35rem; color: var(--muted); }
+    .form-control {
+      width: 100%; padding: 0.5rem; font-family: inherit; font-size: 0.9rem;
+      border: 2px solid var(--line); border-radius: 4px; background: var(--bg);
+    }
+    textarea.form-control { font-family: var(--mono); font-size: 0.85rem; resize: vertical; min-height: 120px; }
+    
+    .box-card {
+      border: 2px solid var(--line); border-radius: 6px; padding: 1rem; background: var(--panel);
+      margin-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center;
+    }
+    .box-info { display: flex; align-items: center; gap: 0.75rem; }
+    .box-color-preview { width: 24px; height: 24px; border: 2px solid var(--line); border-radius: 4px; }
+    
+    .editor-panel-section { border: 2px solid var(--line); border-radius: 6px; padding: 1rem; margin-bottom: 1rem; background: #fff; }
+    .section-title { font-size: 0.9rem; font-weight: 800; text-transform: uppercase; margin-bottom: 0.75rem; border-bottom: 1px solid var(--panel2); padding-bottom: 0.25rem; }
+
+    /* Editor Toolbox (Left panel additions) */
+    .editor-tools { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 0.5rem; border-top: 1px solid #c8c8c8; padding-top: 1rem; }
+    .tool-select-group { display: flex; gap: 0.25rem; background: var(--panel2); padding: 0.2rem; border-radius: 4px; border: 1px solid #c8c8c8; }
+    .tool-btn { flex: 1; padding: 0.4rem; border: none; background: transparent; font-size: 0.8rem; font-weight: 700; cursor: pointer; border-radius: 3px; text-transform: uppercase; }
+    .tool-btn.active { background: var(--bg); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+    
+    .brush-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.4rem; max-height: 150px; overflow-y: auto; padding: 0.2rem; }
+    .brush-item {
+      display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem; border: 2px solid var(--line);
+      border-radius: 4px; background: var(--bg); cursor: pointer; font-size: 0.8rem; font-weight: 700;
+    }
+    .brush-item.active { background: var(--line); color: var(--bg); }
+    
+    .allowance-row { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0; border-bottom: 1px solid var(--panel2); }
+    .allowance-row span { font-size: 0.85rem; font-weight: 700; }
+    .allowance-input { width: 60px; padding: 0.25rem; border: 2px solid var(--line); border-radius: 4px; text-align: center; font-weight: 700; }
+
+    /* Overlay Modal for editing box configurations */
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5);
+      z-index: 100; display: none; align-items: center; justify-content: center; padding: 2rem;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box { background: var(--bg); border: 3px solid var(--line); width: 100%; max-width: 600px; border-radius: 8px; display: flex; flex-direction: column; max-height: 90vh; }
+    .modal-header { padding: 1rem; border-bottom: 2px solid var(--line); background: var(--panel); font-weight: 800; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+    .modal-body { padding: 1.5rem; overflow-y: auto; flex: 1; }
+    .modal-footer { padding: 1rem; border-top: 1px solid var(--panel2); display: flex; justify-content: flex-end; gap: 0.5rem; }
+
+    .level-badge { background: var(--line); color: var(--bg); padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.75rem; font-weight: 700; }
+
+
+    .start-overlay {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      z-index: 9999;
+      padding: 2rem;
+    }
+    .start-card {
+      width: min(420px, 100%);
+      border: 2px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(0,0,0,0.12);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      text-align: center;
+    }
+    .start-title {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+    .start-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .start-choice {
+      padding: 1rem 1.25rem;
+      border: 2px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg);
+      font-weight: 900;
+      font-size: 1rem;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.08s ease, background 0.15s ease;
+    }
+    .start-choice:active { transform: translateY(1px); }
+    .start-choice.play {
+      background: var(--text);
+      color: var(--bg);
+    }
+    #app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    @media (max-width: 850px) {
+      body { overflow-y: auto; height: auto; }
+      .main-container { flex-direction: column; height: auto; overflow: visible; }
+      .left-panel { width: 100%; min-width: 100%; height: auto; overflow: visible; border-right: none; border-bottom: 2px solid var(--line); }
+      .right-panel { height: 600px; }
+    }
+  </style>
+</head>
+<body>
+
+
+  <div id="start-screen" class="start-overlay">
+    <div class="start-card">
+      <div class="start-title">Move It</div>
+      <div class="start-actions">
+        <button class="start-choice play" onclick="enterFromStartMenu('play')">PLAY</button>
+        <button class="start-choice" onclick="openLoadLevelsDialog()">LOAD LEVELS</button>
+        <button class="start-choice" onclick="enterFromStartMenu('editor')">EDIT</button>
+      </div>
+    </div>
+    <input type="file" id="start-load-input" accept=".chxd,application/moveit_dateandtime.chxd,text/plain" style="display:none;" onchange="loadChxdForPlayFromInput(event)">
+  </div>
+
+  <div id="app-shell" style="display:none;">
+
+  <header>
+    <div class="logo-area">
+      <h1>Move it <span id="mode-indicator" style="font-size:0.8rem; font-weight:400; color:var(--muted);">[PLAY]</span></h1>
+    </div>
+  </header>
+
+  <div class="main-container">
+    
+    <div class="left-panel">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em;">World Space</h3>
+        <span class="level-badge" id="runtime-level-display">Level: 1</span>
+      </div>
+      
+      <div class="canvas-container">
+        <canvas id="engineCanvas"></canvas>
+      </div>
+
+      <div class="runtime-controls" id="play-controls">
+        <button class="btn btn-primary" id="run-btn" onclick="toggleEngineRun()">Run Logic</button>
+        <button class="btn" onclick="resetEngineRuntime()">Reset</button>
+      </div>
+
+      <div class="editor-tools" id="editor-left-tools" style="display: none;">
+        <div class="section-title">Editor Canvas Tooling</div>
+        <div class="form-group">
+          <label>Tool Selection</label>
+          <div class="tool-select-group">
+            <button class="tool-btn active" id="tool-paint" onclick="setEditorTool('paint')">Paint</button>
+            <button class="tool-btn" id="tool-erase" onclick="setEditorTool('erase')">Erase</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Active Painting Tile Brush</label>
+          <div class="brush-list" id="editor-brush-container">
+            </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      
+      <div class="screen active" id="screen-gameplay">
+        <div class="gameplay-layout">
+          <div class="workspace-title">
+            <span>Move it program</span>
+            <span style="font-weight: 400; color: var(--muted); font-size: 0.75rem;">Drag Blocks into sequence flow</span>
+          </div>
+          
+          <div class="coding-workspace" id="main-workspace" ondragover="allowDrop(event)" ondrop="handleWorkspaceDrop(event)" ondragleave="handleWorkspaceLeave(event)">
+            <div class="workspace-empty-hint" id="workspace-hint">
+              Drag engine instruction nodes here.<br>Blocks will execute inside the runtime sequence loop.
+            </div>
+          </div>
+          
+          <div class="palette-container">
+            <div class="palette-header">Permitted Instruction Inventory (Level Constraints Enforced)</div>
+            <div class="palette-blocks" id="palette-blocks-container" ondragover="allowDrop(event)" ondrop="handlePaletteDrop(event)">
+              </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="screen" id="screen-editor">
+        <div class="editor-layout">
+          <div class="editor-tabs">
+            <button class="tab-btn active" onclick="switchEditorTab(event, 'tab-levels')">Levels Manager</button>
+            <button class="tab-btn" onclick="switchEditorTab(event, 'tab-boxes')">Custom Boxes Reference</button>
+            <button class="tab-btn" onclick="switchEditorTab(event, 'tab-json')">Raw Engine JSON Manifest</button>
+          </div>
+
+          <div class="tab-content active" id="tab-levels">
+            <div class="editor-grid-two-col">
+              <div>
+                <div class="editor-panel-section">
+                  <div class="section-title">Select Active Working Level</div>
+                  <div class="form-group" style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <select class="form-control" id="editor-level-select" onchange="loadEditorLevelIndex(this.value)"></select>
+                    <button class="btn btn-primary" style="flex:0 0 auto;" onclick="createNewLevelManifest()">Add New Level</button>
+                    <button class="btn" style="flex:0 0 auto;" onclick="testPlaySelectedLevel()">Test Play Level</button>
+                    <button class="btn" style="flex:0 0 auto;" onclick="exportChxdFile()">Export .chxd</button>
+                    <button class="btn" style="flex:0 0 auto;" onclick="document.getElementById('chxd-import-input').click()">Import .chxd</button>
+                    <input type="file" id="chxd-import-input" accept=".chxd,application/moveit_dateandtime.chxd,text/plain" style="display:none;" onchange="importChxdFileFromInput(event)">
+                  </div>
+                </div>
+                
+                <div class="editor-panel-section">
+                  <div class="section-title">Grid Metric Boundaries</div>
+                  <div style="display:flex; gap:0.5rem;">
+                    <div class="form-group" style="flex:1;">
+                      <label>Width Columns</label>
+                      <input type="number" class="form-control" id="level-width-input" value="16" min="5" max="50" onchange="updateLevelDimensions()">
+                    </div>
+                    <div class="form-group" style="flex:1;">
+                      <label>Height Rows</label>
+                      <input type="number" class="form-control" id="level-height-input" value="16" min="5" max="50" onchange="updateLevelDimensions()">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="editor-panel-section">
+                  <div class="section-title">Gameplay Block Inventory Allowances</div>
+                  <div id="editor-block-allowance-container">
+                    </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="tab-content" id="tab-boxes">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+              <div class="section-title" style="margin: 0;">Registered Box Entities Registry</div>
+              <button class="btn btn-primary" style="flex: 0 0 auto;" onclick="openBoxConfigModal(null)">Create Custom Box Entity</button>
+            </div>
+            <div id="editor-boxes-list-container">
+              </div>
+          </div>
+
+          <div class="tab-content" id="tab-json">
+            <div class="editor-panel-section" style="height: 100%; display: flex; flex-direction: column; margin: 0;">
+              <div class="section-title">Live JSON Working Database State</div>
+              <p style="font-size:0.8rem; color:var(--muted); margin-bottom:0.5rem;">Direct mutations here sync live back to the runtime execution registers upon hitting "Apply Changes".</p>
+              <textarea class="form-control" id="json-raw-editor" style="flex:1; font-family:var(--mono); font-size:0.8rem; min-height:300px;"></textarea>
+              <button class="btn btn-primary" style="margin-top:0.75rem; width:100%;" onclick="saveRawJsonState()">Apply Manifest Changes</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="box-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span id="modal-title-text">Box Instance Properties Engine Configurator</span>
+        <button style="border:none; background:transparent; font-size:1.25rem; cursor:pointer; font-weight:700;" onclick="closeBoxConfigModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="modal-box-idx">
+        <div class="form-group">
+          <label>Entity Display System Label Name</label>
+          <input type="text" class="form-control" id="modal-box-name" placeholder="e.g. Danger Spikes">
+        </div>
+        <div class="editor-grid-two-col">
+          <div class="form-group">
+            <label>Canvas Raster Draw Color (Hex)</label>
+            <input type="color" class="form-control" id="modal-box-col" value="#ff0000" style="height:40px; padding:2px;">
+          </div>
+          <div class="form-group">
+            <label>Unique ID Index Vector (Integer)</label>
+            <input type="number" class="form-control" id="modal-box-id-idx" value="4" min="4" max="999">
+          </div>
+        </div>
+        <div class="editor-grid-two-col">
+          <div class="form-group">
+            <label>Singleton Constraint Topology</label>
+            <select class="form-control" id="modal-box-singleton">
+              <option value="0">0 - Multi-instance Allowed</option>
+              <option value="1">1 - Enforce Rigid Singleton</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Physics Weight Downward Gravity Vector</label>
+            <select class="form-control" id="modal-box-gravity">
+              <option value="0">0 - Static Float Element</option>
+              <option value="1">1 - Affected by Downward Gravity</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Block Type</label>
+          <select class="form-control" id="modal-box-blocktype">
+            <option value="1">1 - Solid Block</option>
+            <option value="2">2 - Ghost Block</option>
+            <option value="3">3 - Consumable Block</option>
+          </select>
+        </div>
+
+        <div class="editor-panel-section">
+          <div class="section-title">Engine Core Active Loop Event Handler (onTick)</div>
+          <div class="form-group">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+              <input type="checkbox" id="modal-box-ontick-toggle" onchange="toggleModalTickCodeArea(this.checked)">
+              <label for="modal-box-ontick-toggle" style="margin:0;">Inject active custom JS routine execution into state tick cycles</label>
+            </div>
+            <div id="modal-tick-code-wrapper" style="display:none;">
+              <textarea class="form-control" id="modal-box-ontick-code" placeholder="// Available API methods: placeBox, removeBox, moveBlock, changeState, onCollide, getRefBox&#10;// Example:&#10;// if (onCollide(self.idx, 1)) {&#10;//   changeState(1, { health: 0 });&#10;// }"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="editor-panel-section">
+          <div class="section-title">Engine Core Collision Event Handler (onCollide)</div>
+          <div class="form-group">
+            <div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+              <input type="checkbox" id="modal-box-oncollide-toggle" onchange="toggleModalCollideCodeArea(this.checked)">
+              <label for="modal-box-oncollide-toggle" style="margin:0;">Run code whenever the player collides with this box</label>
+            </div>
+            <div id="modal-collide-code-wrapper" style="display:none;">
+              <textarea class="form-control" id="modal-box-oncollide-code" placeholder="// Available API methods: nextLevel(), prevLevel(), goLevel(index), removeBox, placeBox&#10;// Example:&#10;// nextLevel();"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="editor-panel-section">
+          <div class="section-title">Runtime Internal Attributes Struct Schema (availState)</div>
+          <p style="font-size:0.75rem; color:var(--muted); margin-bottom:0.5rem;">Declare schema constraints. Used during game loop executions.</p>
+          <div class="editor-grid-two-col">
+            <div class="form-group">
+              <label>Property Target Variable Identifier Name</label>
+              <input type="text" class="form-control" id="modal-state-name" placeholder="e.g. state_var">
+            </div>
+            <div class="form-group">
+              <label>Rule Constraint Mode Type</label>
+              <select class="form-control" id="modal-state-type" onchange="toggleStateConstraintUI(this.value)">
+                <option value="none">None - Unbound Dynamic Field</option>
+                <option value="range">Range - Clamped Numeric Boundary [Min, Max]</option>
+                <option value="crange">cRange - Explicit Enum Permitted Literal Tokens Array</option>
+              </select>
+            </div>
+          </div>
+          <div id="modal-state-rule-params-range" style="display:none;" class="editor-grid-two-col">
+            <div class="form-group">
+              <label>Numeric Floor Lower Bound Minimum Value</label>
+              <input type="number" class="form-control" id="modal-state-min" value="0">
+            </div>
+            <div class="form-group">
+              <label>Numeric Ceiling Upper Bound Maximum Value</label>
+              <input type="number" class="form-control" id="modal-state-max" value="100">
+            </div>
+          </div>
+          <div id="modal-state-rule-params-crange" style="display:none;" class="form-group">
+            <label>Valid Values Enumerated String CSV Array Tokens (Strict Type Homogeneity)</label>
+            <input type="text" class="form-control" id="modal-state-crange-tokens" placeholder='e.g. "idle", "walk", "jump" or 1, 2, 3'>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeBoxConfigModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="commitBoxConfigurationForm()">Save Definitions Package</button>
+      </div>
+    </div>
+  </div>
+
+  </div>
+
+  <script>
+    window.MoveItCodec = (() => {
+      const fixedFields = ["type", "x", "y", "state"];
+      const optionalFields = ["x2", "y2"];
+
+      function zigZagEncode(n) {
+        const v = BigInt(n);
+        return v >= 0n ? (v << 1n) : ((-v << 1n) - 1n);
+      }
+
+      function zigZagDecode(u) {
+        const v = BigInt(u);
+        return (v >> 1n) ^ (-(v & 1n));
+      }
+
+      function pushVarint(bytes, value) {
+        let n = BigInt(value);
+        if (n < 0n) throw new Error("n is not enough");
+
+        while (n >= 0x80n) {
+          bytes.push(Number((n & 0x7fn) | 0x80n));
+          n >>= 7n;
+        }
+        bytes.push(Number(n));
+      }
+
+      function readVarint(bytes, index) {
+        let value = 0n;
+        let shift = 0n;
+
+        while (true) {
+          if (index >= bytes.length) throw new Error("Invalid Input");
+          const byte = bytes[index++];
+          value |= BigInt(byte & 0x7f) << shift;
+
+          if ((byte & 0x80) === 0) {
+            return [value, index];
+          }
+
+          shift += 7n;
+        }
+      }
+
+      function bytesToBase64Url(bytes) {
+        let binary = "";
+        const chunkSize = 0x8000;
+
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+          binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+        }
+
+        return btoa(binary)
+          .replaceAll("+", "-")
+          .replaceAll("/", "_")
+          .replaceAll("=", "");
+      }
+
+      function base64UrlToBytes(str) {
+        let b64 = str.replaceAll("-", "+").replaceAll("_", "/");
+        while (b64.length % 4 !== 0) b64 += "=";
+
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+
+        return bytes;
+      }
+
+      function hasValue(v) {
+        return v !== undefined && v !== null;
+      }
+
+      function encodeColumn(bytes, nodes, field) {
+        if (nodes.length === 0) return;
+
+        let prev = BigInt(nodes[0][field]);
+        pushVarint(bytes, zigZagEncode(prev));
+
+        for (let i = 1; i < nodes.length; i++) {
+          const cur = BigInt(nodes[i][field]);
+          const delta = cur - prev;
+          pushVarint(bytes, zigZagEncode(delta));
+          prev = cur;
+        }
+      }
+
+      function decodeColumn(bytes, index, n) {
+        const out = new Array(n);
+        let value;
+
+        [value, index] = readVarint(bytes, index);
+        value = zigZagDecode(value);
+        out[0] = Number(value);
+
+        for (let i = 1; i < n; i++) {
+          let delta;
+          [delta, index] = readVarint(bytes, index);
+          delta = zigZagDecode(delta);
+          value += delta;
+          out[i] = Number(value);
+        }
+
+        return [out, index];
+      }
+
+      function encode(nodes) {
+        const bytes = [];
+        pushVarint(bytes, nodes.length);
+
+        for (const node of nodes) {
+          let mask = 0;
+          if (hasValue(node.x2)) mask |= 1;
+          if (hasValue(node.y2)) mask |= 2;
+          pushVarint(bytes, mask);
+        }
+
+        for (const field of fixedFields) {
+          encodeColumn(bytes, nodes, field);
+        }
+
+        for (const field of optionalFields) {
+          let prevSet = false;
+          let prev = 0n;
+
+          for (let i = 0; i < nodes.length; i++) {
+            const node = nodes[i];
+            const present =
+              (field === "x2" && hasValue(node.x2)) ||
+              (field === "y2" && hasValue(node.y2));
+
+            if (!present) continue;
+
+            const cur = BigInt(node[field]);
+            if (!prevSet) {
+              pushVarint(bytes, zigZagEncode(cur));
+              prev = cur;
+              prevSet = true;
+            } else {
+              const delta = cur - prev;
+              pushVarint(bytes, zigZagEncode(delta));
+              prev = cur;
+            }
+          }
+        }
+
+        return bytesToBase64Url(Uint8Array.from(bytes));
+      }
+
+      function decode(str) {
+        const bytes = base64UrlToBytes(str);
+        let index = 0;
+
+        let count;
+        [count, index] = readVarint(bytes, index);
+
+        const n = Number(count);
+        if (!Number.isSafeInteger(n) || n < 0) throw new Error("n is not an integer");
+        if (n === 0) return [];
+
+        const masks = new Array(n);
+        for (let i = 0; i < n; i++) {
+          let mask;
+          [mask, index] = readVarint(bytes, index);
+          masks[i] = Number(mask);
+        }
+
+        const columns = {};
+        for (const field of fixedFields) {
+          let col;
+          [col, index] = decodeColumn(bytes, index, n);
+          columns[field] = col;
+        }
+
+        const optionalColumns = {};
+        for (const field of optionalFields) {
+          optionalColumns[field] = new Array(n);
+          let seenAny = false;
+          let value = 0n;
+
+          for (let i = 0; i < n; i++) {
+            const present =
+              (field === "x2" && (masks[i] & 1)) ||
+              (field === "y2" && (masks[i] & 2));
+
+            if (!present) {
+              optionalColumns[field][i] = undefined;
+              continue;
+            }
+
+            let v;
+            [v, index] = readVarint(bytes, index);
+            v = zigZagDecode(v);
+
+            if (!seenAny) {
+              value = v;
+              seenAny = true;
+            } else {
+              value += v;
+            }
+
+            optionalColumns[field][i] = Number(value);
+          }
+        }
+
+        if (index !== bytes.length) throw new Error("index is not bytes");
+
+        const nodes = [];
+        for (let i = 0; i < n; i++) {
+          const node = {
+            type: columns.type[i],
+            x: columns.x[i],
+            y: columns.y[i],
+            state: columns.state[i],
+          };
+
+          if (masks[i] & 1) node.x2 = optionalColumns.x2[i];
+          if (masks[i] & 2) node.y2 = optionalColumns.y2[i];
+
+          nodes.push(node);
+        }
+
+        return nodes;
+      }
+
+      function lz77Compress(str) {
+        const out = [];
+        let i = 0;
+        const windowSize = 4096;
+        const lookAhead = 4096;
+
+        while (i < str.length) {
+          let bestLen = 0;
+          let bestDist = 0;
+          const maxSearch = Math.min(i, windowSize);
+
+          for (let dist = 1; dist <= maxSearch; dist++) {
+            let len = 0;
+
+            while (
+              len < lookAhead &&
+              i + len < str.length &&
+              str[i - dist + len] === str[i + len]
+            ) {
+              len++;
+            }
+
+            if (len > bestLen) {
+              bestLen = len;
+              bestDist = dist;
+            }
+          }
+
+          if (bestLen > 3) {
+            out.push(`~${bestDist}.${bestLen}~`);
+            i += bestLen;
+          } else {
+            out.push(str[i]);
+            i++;
+          }
+        }
+
+        return out.join("");
+      }
+
+      function autoLz77Compress(str) {
+        let best = str;
+        let prev = str;
+        let passes = 0;
+
+        while (true) {
+          const next = lz77Compress(prev);
+          if (next.length >= prev.length) break;
+          best = next;
+          prev = next;
+          passes++;
+        }
+
+        return String(passes).padStart(2, "0") + best;
+      }
+
+      function lz77Decompress(str) {
+        let out = "";
+        let i = 0;
+
+        while (i < str.length) {
+          if (str[i] === "~") {
+            i++;
+
+            const firstDot = str.indexOf(".", i);
+            const secondTilde = str.indexOf("~", firstDot + 1);
+
+            if (firstDot === -1 || secondTilde === -1) {
+              throw new Error("Formula is not supported");
+            }
+
+            const dist = parseInt(str.slice(i, firstDot), 10);
+            const len = parseInt(str.slice(firstDot + 1, secondTilde), 10);
+
+            if (!Number.isFinite(dist) || !Number.isFinite(len) || dist <= 0 || len < 0) {
+              throw new Error("Number is not finite");
+            }
+
+            const start = out.length - dist;
+            if (start < 0) throw new Error("start is 0");
+
+            for (let k = 0; k < len; k++) {
+              out += out[start + k];
+            }
+
+            i = secondTilde + 1;
+          } else {
+            out += str[i];
+            i++;
+          }
+        }
+
+        return out;
+      }
+
+      function autoLz77Decompress(str) {
+        const passes = parseInt(str.slice(0, 2), 10);
+        let data = str.slice(2);
+
+        for (let i = 0; i < passes; i++) {
+          data = lz77Decompress(data);
+        }
+
+        return data;
+      }
+
+      function encodeJSON(value) {
+        return autoLz77Compress(JSON.stringify(value));
+      }
+
+      function decodeJSON(str) {
+        return JSON.parse(autoLz77Decompress(str));
+      }
+
+      return {
+        encode,
+        decode,
+        encodeJSON,
+        decodeJSON,
+        autoLz77Compress,
+        autoLz77Decompress
+      };
+    })();
+  </script>
+
+  <script>
+
+    let defaultLevels = {
+      metaData: {
+        name: "Core Engine Project Instance",
+        dateCreated: "2026-06-09"
+      },
+      vars: {
+        globalGravitySpeed: 1
+      },
+      levels: [
+        {
+          gridSize: [16, 16],
+         world: [
+            [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,2,4],
+            [4,0,0,0,0,0,3,3,3,3,3,3,3,3,3,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,3,3,3,3,3,0,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,0,0,0,0,3,3,3,3,3,0,0,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,3,3,3,0,0,0,0,0,0,0,0,4],
+            [4,0,0,0,0,0,0,0,0,0,3,3,3,3,3,4],
+            [4,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,1,0,0,0,0,0,0,0,0,0,0,0,0,0,4],
+            [4,3,3,3,3,3,3,3,3,3,3,3,3,3,3,4],
+            [4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4],
+          ],
+          blocks: [
+            [1, 5], // Move Left
+            [2, 5], // Move Right
+            [3, 3], // Jump
+            [4, 2], // onCollide
+            [6, 1]  // Tick Master Event
+          ]
+        }
+      ]
+    };
+
+    
+    // Core Engine Box Catalog Specs
+    let boxReference = {
+      1: {
+        name: "Player Entity",
+        idx: 1,
+        singleton: 1,
+        col: "#ff4d4d",
+        gravity: 0,
+        blockType: 2,
+        builtIn: true,
+        onTick: null,
+        onCollide: null,
+        state: { health: 100, mode: "idle" },
+        availState: [
+          { name: "health", range: [0, 100] },
+          { name: "mode", cRange: ["idle", "walk", "jump"] }
+        ]
+      },
+      2: {
+        name: "Exit Goal Matrix",
+        idx: 2,
+        singleton: 1,
+        col: "#2ecc71",
+        gravity: 0,
+        blockType: 3,
+        builtIn: true,
+        onTick: null,
+        onCollide: "nextLevel();",
+        state: {},
+        availState: []
+      },
+      3: {
+        name: "Floor",
+        idx: 3,
+        blockType: 1,
+        singleton: 0,
+        col: "#7f8c8d",
+        gravity: 0,
+        onTick: null,
+        state: {},
+        availState: []
+      },
+      4: {
+        name: "Wall",
+        idx: 4,
+        blockType: 1,
+        singleton: 0,
+        col: "#4b5563",
+        gravity: 0,
+        onTick: null,
+        state: {},
+        availState: []
+      }
+    };
+
+    function isBuiltInBoxId(boxIdx) {
+      return !!boxReference[boxIdx]?.builtIn;
+    }
+
+    // Instruction Graph Logic Registry Setup
+    const engineBlocksRegistry = {
+      1: { name: "Move Left", col: "#3498db", ide: 1, display: ["label"], func: (ctx) => runtimeApi.moveBlockRelative(-1, 0) },
+      2: { name: "Move Right", col: "#3498db", ide: 2, display: ["label"], func: (ctx) => runtimeApi.moveBlockRelative(1, 0) },
+      3: { name: "Jump", col: "#9b59b6", ide: 3, display: ["label"], func: (ctx) => runtimeApi.executePlayerJump() },
+      4: { name: "onCollide Trigger", col: "#e67e22", ide: 4, display: ["selector", "exec"], func: (ctx, selVal, innerCodeArr) => runtimeApi.evaluateConditionalCollision(selVal, innerCodeArr) },
+      5: { name: "onStep Interceptor", col: "#d35400", ide: 5, display: ["selector", "exec"], func: (ctx, selVal, innerCodeArr) => runtimeApi.evaluateConditionalStep(selVal, innerCodeArr) },
+      6: { name: "Tick Master Frame Loop", col: "#2c3e50", ide: 6, display: ["label", "exec"], func: (ctx, selVal, innerCodeArr) => runtimeApi.executeNestedStackSequence(innerCodeArr) },
+      7: { name: "Select Active Box Context", col: "#1abc9c", ide: 7, display: ["selector"], func: (ctx, selVal) => { return selVal; } }
+    };
+    
+    // System App Working Environments Parameters States
+    let currentApplicationMode = "play";
+    let currentWorkingLevelIndex = 0;
+    let canvasElement, canvasContext;
+    let activeEngineExecutionTimerId = null;
+    let activeEditorWorkingTool = "paint";
+    let activeEditorSelectedBrushIdx = 1;
+    
+    // Abstracted Engine Runtime Volatile Memory Buffers Clones
+    let runtimeActiveWorkingGridWorld = [];
+    let runtimeExecutionProgramTrackGraph = [];
+    let runtimePlayerPositions = [];
+    let runtimePlayerVerticalVelocity = 0;
+
+    // HTML5 Drag-and-Drop Global State Data Store Cache
+    let internalDraggableTrackingObject = null;
+
+    const originalLevelsData = JSON.parse(JSON.stringify(defaultLevels));
+    let playLevelsData = JSON.parse(JSON.stringify(originalLevelsData));
+    let editorLevelsData = JSON.parse(JSON.stringify(originalLevelsData));
+
+    function cloneLevelsManifest(manifest) {
+      return JSON.parse(JSON.stringify(manifest));
+    }
+
+    function setActiveProject(kind) {
+      defaultLevels = kind === "editor" ? editorLevelsData : playLevelsData;
+    }
+
+    function parseChxdText(text) {
+      const raw = String(text || "").trim();
+      if (!raw) throw new Error("Empty file");
+
+      let payload;
+      if (raw.startsWith("CHXD1|")) {
+        payload = MoveItCodec.decodeJSON(raw.slice(6));
+      } else {
+        payload = JSON.parse(raw);
+      }
+
+      const manifest = payload && payload.data ? payload.data : payload;
+      if (!manifest || !Array.isArray(manifest.levels)) {
+        throw new Error("Invalid .chxd data");
+      }
+
+      return manifest;
+    }
+
+    function openLoadLevelsDialog() {
+      const input = document.getElementById("start-load-input");
+      if (input) input.click();
+    }
+
+    function importManifestIntoPlayProject(manifest) {
+      playLevelsData = cloneLevelsManifest(manifest);
+      setActiveProject("play");
+      currentWorkingLevelIndex = 0;
+      loadLevelSpecificationTopologyIntoWorkingMemory(0, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    function importManifestIntoEditorProject(manifest) {
+      editorLevelsData = cloneLevelsManifest(manifest);
+      setActiveProject("editor");
+      currentWorkingLevelIndex = 0;
+      loadLevelSpecificationTopologyIntoWorkingMemory(0, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      canvasElement = document.getElementById("engineCanvas");
+      canvasContext = canvasElement.getContext("2d");
+      
+      setActiveProject("play");
+      loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+      setupDomInterfaceActionListeners();
+      
+      requestAnimationFrame(renderCoreEngineGraphicsViewportPipeline);
+    });
+
+
+    function enterFromStartMenu(mode) {
+      const startScreen = document.getElementById("start-screen");
+      const appShell = document.getElementById("app-shell");
+      if (startScreen) startScreen.style.display = "none";
+      if (appShell) appShell.style.display = "flex";
+
+      if (activeEngineExecutionTimerId) {
+        clearInterval(activeEngineExecutionTimerId);
+        activeEngineExecutionTimerId = null;
+      }
+
+      currentWorkingLevelIndex = 0;
+      if (mode === "play") {
+        setActiveProject("play");
+        loadLevelSpecificationTopologyIntoWorkingMemory(0, { preserveWorkspace: true });
+        switchMode("play");
+        resetEngineRuntime();
+        toggleEngineRun();
+      } else {
+        setActiveProject("editor");
+        loadLevelSpecificationTopologyIntoWorkingMemory(0, { preserveWorkspace: true });
+        switchMode("editor");
+      }
+    }
+
+    function testPlaySelectedLevel() {
+      if (activeEngineExecutionTimerId) {
+        clearInterval(activeEngineExecutionTimerId);
+        activeEngineExecutionTimerId = null;
+      }
+      setActiveProject("play");
+      goLevel(currentWorkingLevelIndex);
+      switchMode("play");
+      resetEngineRuntime();
+      toggleEngineRun();
+    }
+
+    function exportChxdFile() {
+      const activeManifest = currentApplicationMode === "editor" ? editorLevelsData : playLevelsData;
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: activeManifest
+      };
+
+      const encoded = "CHXD1|" + MoveItCodec.encodeJSON(payload);
+      const blob = new Blob([encoded], { type: "application/moveit_dateandtime.chxd" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+      a.href = url;
+      a.download = `moveit_${stamp}.chxd`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    }
+
+    function loadChxdForPlayFromInput(ev) {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const manifest = parseChxdText(reader.result);
+          importManifestIntoPlayProject(manifest);
+          enterFromStartMenu("play");
+        } catch (err) {
+          alert(err.message || "Import failed");
+          const startScreen = document.getElementById("start-screen");
+          const appShell = document.getElementById("app-shell");
+          if (startScreen) startScreen.style.display = "flex";
+          if (appShell) appShell.style.display = "none";
+        } finally {
+          ev.target.value = "";
+        }
+      };
+      reader.onerror = () => {
+        alert("Import failed");
+        ev.target.value = "";
+      };
+      reader.readAsText(file);
+    }
+
+    function importChxdFileFromText(text) {
+      const manifest = parseChxdText(text);
+      importManifestIntoEditorProject(manifest);
+      alert("Imported successfully.");
+    }
+
+    function importChxdFileFromInput(ev) {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          importChxdFileFromText(reader.result);
+        } catch (err) {
+          alert(err.message || "Import failed");
+        } finally {
+          ev.target.value = "";
+        }
+      };
+      reader.onerror = () => {
+        alert("Import failed");
+        ev.target.value = "";
+      };
+      reader.readAsText(file);
+    }
+
+    function setupDomInterfaceActionListeners() {
+      window.addEventListener("resize", () => renderCoreEngineGraphicsViewportPipeline());
+      canvasElement.addEventListener("mousedown", handleCanvasGridInteractionClick);
+      canvasElement.addEventListener("mousemove", (e) => {
+        if (e.buttons === 1) handleCanvasGridInteractionClick(e);
+      });
+    }
+
+    function switchMode(targetMode) {
+      if (activeEngineExecutionTimerId) toggleEngineRun();
+
+      currentApplicationMode = targetMode;
+      setActiveProject(targetMode === "editor" ? "editor" : "play");
+      document.getElementById("mode-indicator").textContent = `[${targetMode.toUpperCase()}]`;
+
+      document.getElementById("screen-gameplay").classList.toggle("active", targetMode === "play");
+      document.getElementById("screen-editor").classList.toggle("active", targetMode === "editor");
+      document.getElementById("editor-left-tools").style.display = targetMode === "editor" ? "flex" : "none";
+      document.getElementById("play-controls").style.display = targetMode === "play" ? "flex" : "none";
+
+      loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    function loadLevelSpecificationTopologyIntoWorkingMemory(levelIndex, options = {}) {
+      const { preserveWorkspace = true } = options;
+      const activeLevelsChain = defaultLevels.levels;
+      if (!activeLevelsChain[levelIndex]) {
+        if (activeLevelsChain.length > 0) currentWorkingLevelIndex = 0;
+        else createNewLevelManifest();
+      } else {
+        currentWorkingLevelIndex = levelIndex;
+      }
+
+      document.getElementById("runtime-level-display").textContent = `Level: ${currentWorkingLevelIndex + 1}`;
+
+      syncRuntimeStateFromCurrentLevelSpec();
+
+      if (!preserveWorkspace) {
+        runtimeExecutionProgramTrackGraph = [];
+      }
+
+      rebuildVisualCodingWorkspaceDomTreeLayout();
+      rebuildAvailableInstructionsPaletteUIEngine();
+      renderCoreEngineGraphicsViewportPipeline();
+    }
+
+    function syncRuntimeStateFromCurrentLevelSpec() {
+      const currentTargetLevelSpec = defaultLevels.levels[currentWorkingLevelIndex];
+      if (!currentTargetLevelSpec) return;
+
+      runtimeActiveWorkingGridWorld = JSON.parse(JSON.stringify(currentTargetLevelSpec.world));
+      runtimePlayerPositions = [];
+      runtimePlayerVerticalVelocity = 0;
+
+      for (let r = 0; r < runtimeActiveWorkingGridWorld.length; r++) {
+        for (let c = 0; c < runtimeActiveWorkingGridWorld[r].length; c++) {
+          if (runtimeActiveWorkingGridWorld[r][c] === 1) {
+            runtimePlayerPositions.push({ x: c, y: r });
+            runtimeActiveWorkingGridWorld[r][c] = 0;
+          }
+        }
+      }
+
+      if (runtimePlayerPositions.length === 0) {
+        const maybeExisting = currentTargetLevelSpec.world.flatMap((row, y) =>
+          row.map((val, x) => val === 1 ? { x, y } : null).filter(Boolean)
+        );
+        if (maybeExisting.length > 0) runtimePlayerPositions = maybeExisting;
+      }
+    }
+
+    function getPrimaryPlayerPosition() {
+      return runtimePlayerPositions[0] || null;
+    }
+
+    function setPrimaryPlayerPosition(newX, newY) {
+      if (runtimePlayerPositions.length === 0) {
+        runtimePlayerPositions = [{ x: newX, y: newY }];
+      } else {
+        runtimePlayerPositions[0] = { x: newX, y: newY };
+      }
+    }
+
+    function isPlayerGrounded() {
+      const playerPos = getPrimaryPlayerPosition();
+      if (!playerPos) return false;
+      const belowY = playerPos.y + 1;
+      if (!runtimeApi.validateCoordinateBoundaries(playerPos.x, belowY)) return false;
+      return isSolidBlockIndex(runtimeActiveWorkingGridWorld[belowY]?.[playerPos.x]);
+    }
+
+    function getBlockDefinitionByIndex(idx) {
+      return boxReference[idx] || null;
+    }
+
+    function getBlockTypeByIndex(idx) {
+      return getBlockDefinitionByIndex(idx)?.blockType ?? 0;
+    }
+
+    function isSolidBlockIndex(idx) {
+      return getBlockTypeByIndex(idx) === 1;
+    }
+
+    function isGhostBlockIndex(idx) {
+      return getBlockTypeByIndex(idx) === 2;
+    }
+
+    function isConsumableBlockIndex(idx) {
+      return getBlockTypeByIndex(idx) === 3;
+    }
+
+    function executeBoxScript(codeString, selfContextObject) {
+      if (!codeString || !String(codeString).trim()) return;
+      try {
+        const compiledExecutionScopeSandbox = new Function("api", "self", "nextLevel", "prevLevel", "goLevel", codeString);
+        compiledExecutionScopeSandbox(runtimeApi, selfContextObject, nextLevel, prevLevel, goLevel);
+      } catch (err) {
+        console.error(`Runtime Script error for box index [${selfContextObject?.idx ?? "?"}]:`, err);
+      }
+    }
+
+    function triggerBoxCollisionEffectsAt(x, y, idx) {
+      const targetBoxDef = getBlockDefinitionByIndex(idx);
+      if (!targetBoxDef) return;
+
+      const selfContext = {
+        idx,
+        x,
+        y,
+        state: targetBoxDef.state || {}
+      };
+
+      if (targetBoxDef.blockType === 3) {
+        runtimeApi.removeBox(x, y);
+      }
+
+      executeBoxScript(targetBoxDef.onCollide, selfContext);
+    }
+
+    // Monolithic Engine API
+    const runtimeApi = {
+      removeBox: (x, y) => {
+        if (!runtimeApi.validateCoordinateBoundaries(x, y)) return;
+
+        const playerPos = getPrimaryPlayerPosition();
+        if (playerPos && playerPos.x === x && playerPos.y === y) {
+          runtimePlayerPositions = runtimePlayerPositions.filter(p => !(p.x === x && p.y === y));
+        }
+
+        runtimeActiveWorkingGridWorld[y][x] = 0;
+      },
+      placeBox: (coords, idx) => {
+        const [x, y] = coords;
+        if (!runtimeApi.validateCoordinateBoundaries(x, y)) return;
+
+        if (idx === 1) {
+          setPrimaryPlayerPosition(x, y);
+          return;
+        }
+
+        if (boxReference[idx] && boxReference[idx].singleton === 1) {
+          runtimeApi.purgeGlobalInstancesOfEntityIndex(idx);
+        }
+
+        runtimeActiveWorkingGridWorld[y][x] = idx;
+      },
+      moveBlock: (sourceCoords, targetCoords, idx) => {
+        const [sx, sy] = sourceCoords;
+        const [tx, ty] = targetCoords;
+
+        if (idx === 1) {
+          if (!runtimeApi.validateCoordinateBoundaries(tx, ty)) return;
+          setPrimaryPlayerPosition(tx, ty);
+          return;
+        }
+
+        if (runtimeApi.validateCoordinateBoundaries(sx, sy)) {
+          runtimeActiveWorkingGridWorld[sy][sx] = 0;
+        }
+        if (runtimeApi.validateCoordinateBoundaries(tx, ty)) {
+          runtimeActiveWorkingGridWorld[ty][tx] = idx;
+        }
+      },
+      changeState: (idx, statePropertiesObject) => {
+        if (boxReference[idx]) {
+          const targetBoxDef = boxReference[idx];
+          if (!targetBoxDef.state) targetBoxDef.state = {};
+
+          for (let key in statePropertiesObject) {
+            let processedVal = statePropertiesObject[key];
+            const schemaRule = targetBoxDef.availState.find(r => r.name === key);
+            if (schemaRule) {
+              if (schemaRule.range) {
+                processedVal = Math.max(schemaRule.range[0], Math.min(schemaRule.range[1], processedVal));
+              } else if (schemaRule.cRange) {
+                if (!schemaRule.cRange.includes(processedVal)) continue;
+              }
+            }
+            targetBoxDef.state[key] = processedVal;
+          }
+        }
+      },
+      onCollide: (idx1, idx2) => {
+        const locs1 = runtimeApi.locateAllEntityCoordinatesIndices(idx1);
+        const locs2 = runtimeApi.locateAllEntityCoordinatesIndices(idx2);
+        for (let p1 of locs1) {
+          for (let p2 of locs2) {
+            if (p1.x === p2.x && p1.y === p2.y) return true;
+          }
+        }
+        return false;
+      },
+      getRefBox: (idx) => boxReference[idx] || null,
+      getRefEngine: (ide) => engineBlocksRegistry[ide] || null,
+      getBox: () => runtimeActiveWorkingGridWorld,
+      getEngine: () => engineBlocksRegistry,
+      getBlockType: (idx) => getBlockTypeByIndex(idx),
+
+      validateCoordinateBoundaries: (x, y) => {
+        const currentTargetLevelSpec = defaultLevels.levels[currentWorkingLevelIndex];
+        const [w, h] = currentTargetLevelSpec.gridSize;
+        return (x >= 0 && x < w && y >= 0 && y < h);
+      },
+      locateAllEntityCoordinatesIndices: (idx) => {
+        if (idx === 1) return runtimePlayerPositions.map(p => ({ x: p.x, y: p.y }));
+
+        const matches = [];
+        for (let r = 0; r < runtimeActiveWorkingGridWorld.length; r++) {
+          for (let c = 0; c < runtimeActiveWorkingGridWorld[r].length; c++) {
+            if (runtimeActiveWorkingGridWorld[r][c] === idx) matches.push({ x: c, y: r });
+          }
+        }
+        return matches;
+      },
+      purgeGlobalInstancesOfEntityIndex: (idx) => {
+        if (idx === 1) {
+          runtimePlayerPositions = [];
+          return;
+        }
+        for (let r = 0; r < runtimeActiveWorkingGridWorld.length; r++) {
+          for (let c = 0; c < runtimeActiveWorkingGridWorld[r].length; c++) {
+            if (runtimeActiveWorkingGridWorld[r][c] === idx) runtimeActiveWorkingGridWorld[r][c] = 0;
+          }
+        }
+      },
+      moveBlockRelative: (dx, dy) => {
+        const playerPos = getPrimaryPlayerPosition();
+        if (!playerPos) return;
+
+        const targetX = playerPos.x + dx;
+        const targetY = playerPos.y + dy;
+
+        if (!runtimeApi.validateCoordinateBoundaries(targetX, targetY)) return;
+
+        const targetCellIdx = runtimeActiveWorkingGridWorld[targetY][targetX];
+        if (isSolidBlockIndex(targetCellIdx)) return;
+
+        runtimeApi.moveBlock([playerPos.x, playerPos.y], [targetX, targetY], 1);
+
+        if (targetCellIdx > 0) {
+          triggerBoxCollisionEffectsAt(targetX, targetY, targetCellIdx);
+        }
+      },
+      executePlayerJump: () => {
+        const playerPos = getPrimaryPlayerPosition();
+        if (!playerPos) return;
+
+        if (!isPlayerGrounded()) return;
+
+        const targetY = playerPos.y - 1;
+        if (!runtimeApi.validateCoordinateBoundaries(playerPos.x, targetY)) return;
+
+        const blockAbove = runtimeActiveWorkingGridWorld[targetY]?.[playerPos.x];
+        if (isSolidBlockIndex(blockAbove)) return;
+
+        runtimePlayerVerticalVelocity = -2;
+      },
+      evaluateConditionalCollision: (targetBoxIdx, innerExecutionSequenceBlockGraph) => {
+        if (runtimeApi.onCollide(1, parseInt(targetBoxIdx))) {
+          runtimeApi.executeNestedStackSequence(innerExecutionSequenceBlockGraph);
+        }
+      },
+      evaluateConditionalStep: (targetBoxIdx, innerExecutionSequenceBlockGraph) => {
+        const playerPos = getPrimaryPlayerPosition();
+        if (!playerPos) return;
+        const downY = playerPos.y + 1;
+        if (runtimeApi.validateCoordinateBoundaries(playerPos.x, downY)) {
+          if (runtimeActiveWorkingGridWorld[downY][playerPos.x] === parseInt(targetBoxIdx)) {
+            runtimeApi.executeNestedStackSequence(innerExecutionSequenceBlockGraph);
+          }
+        }
+      },
+      executeNestedStackSequence: (innerBlocksList) => {
+        if (!innerBlocksList || !Array.isArray(innerBlocksList)) return;
+        for (let instructionNode of innerBlocksList) {
+          executeIndividualProgramNodeBlockContext(instructionNode);
+        }
+      }
+    };
+
+    function executeIndividualProgramNodeBlockContext(node) {
+      const blockDef = engineBlocksRegistry[node.ide];
+      if (!blockDef) return;
+      blockDef.func({ self: node }, node.selectedValue, node.children);
+    }
+
+    function shouldRunOnStartup(node) {
+      return ![4, 5, 6].includes(node.ide);
+    }
+
+    function shouldRunEveryTick(node) {
+      return [4, 5, 6].includes(node.ide);
+    }
+
+    function executeOneTimeStartupGraphPass() {
+      for (let topLevelNode of runtimeExecutionProgramTrackGraph) {
+        if (shouldRunOnStartup(topLevelNode)) {
+          executeIndividualProgramNodeBlockContext(topLevelNode);
+        }
+      }
+    }
+
+    function processEngineRuntimeTickLoopPulse() {
+      applyEnvironmentalGravityTickVectors();
+      applyPlayerVerticalMotionTick();
+
+      for (let topLevelNode of runtimeExecutionProgramTrackGraph) {
+        if (shouldRunEveryTick(topLevelNode)) {
+          executeIndividualProgramNodeBlockContext(topLevelNode);
+        }
+      }
+
+      evaluatePlayerCollisionEvents();
+      evaluateActiveBoxesOnTickCustomCodeScripts();
+      renderCoreEngineGraphicsViewportPipeline();
+    }
+
+    function applyEnvironmentalGravityTickVectors() {
+      const currentTargetLevelSpec = defaultLevels.levels[currentWorkingLevelIndex];
+      const [w, h] = currentTargetLevelSpec.gridSize;
+
+      for (let y = h - 2; y >= 0; y--) {
+        for (let x = 0; x < w; x++) {
+          const currentCellBoxIdx = runtimeActiveWorkingGridWorld[y][x];
+          if (currentCellBoxIdx > 0 && boxReference[currentCellBoxIdx]?.gravity === 1) {
+            const targetDropCellY = y + 1;
+            if (targetDropCellY < h && runtimeActiveWorkingGridWorld[targetDropCellY][x] === 0) {
+              runtimeApi.moveBlock([x, y], [x, targetDropCellY], currentCellBoxIdx);
+            }
+          }
+        }
+      }
+    }
+
+    function applyPlayerVerticalMotionTick() {
+      const playerPos = getPrimaryPlayerPosition();
+      if (!playerPos) return;
+
+      if (runtimePlayerVerticalVelocity < 0) {
+        const targetY = playerPos.y - 1;
+        if (!runtimeApi.validateCoordinateBoundaries(playerPos.x, targetY)) {
+          runtimePlayerVerticalVelocity = 0;
+          return;
+        }
+
+        const aboveIdx = runtimeActiveWorkingGridWorld[targetY]?.[playerPos.x];
+        if (isSolidBlockIndex(aboveIdx)) {
+          runtimePlayerVerticalVelocity = 0;
+          return;
+        }
+
+        runtimeApi.moveBlock([playerPos.x, playerPos.y], [playerPos.x, targetY], 1);
+        runtimePlayerVerticalVelocity += 1;
+        return;
+      }
+
+      const belowY = playerPos.y + 1;
+      if (!runtimeApi.validateCoordinateBoundaries(playerPos.x, belowY)) return;
+
+      const belowIdx = runtimeActiveWorkingGridWorld[belowY]?.[playerPos.x];
+      if (isSolidBlockIndex(belowIdx)) {
+        runtimePlayerVerticalVelocity = 0;
+        return;
+      }
+
+      runtimeApi.moveBlock([playerPos.x, playerPos.y], [playerPos.x, belowY], 1);
+      runtimePlayerVerticalVelocity = 0;
+    }
+
+    function evaluateActiveBoxesOnTickCustomCodeScripts() {
+      for (let r = 0; r < runtimeActiveWorkingGridWorld.length; r++) {
+        for (let c = 0; c < runtimeActiveWorkingGridWorld[r].length; c++) {
+          const cellBoxIdx = runtimeActiveWorkingGridWorld[r][c];
+          if (cellBoxIdx > 0 && boxReference[cellBoxIdx]?.onTick) {
+            const boxRefInstance = boxReference[cellBoxIdx];
+            executeBoxScript(boxRefInstance.onTick, { idx: cellBoxIdx, x: c, y: r, state: boxRefInstance.state });
+          }
+        }
+      }
+
+      for (const playerPos of runtimePlayerPositions) {
+        if (boxReference[1]?.onTick) {
+          executeBoxScript(boxReference[1].onTick, { idx: 1, x: playerPos.x, y: playerPos.y, state: boxReference[1].state });
+        }
+      }
+    }
+
+    function evaluatePlayerCollisionEvents() {
+      const playerPos = getPrimaryPlayerPosition();
+      if (!playerPos) return;
+
+      if (!runtimeApi.validateCoordinateBoundaries(playerPos.x, playerPos.y)) return;
+
+      const occupantIdx = runtimeActiveWorkingGridWorld[playerPos.y][playerPos.x];
+      if (occupantIdx > 0) {
+        triggerBoxCollisionEffectsAt(playerPos.x, playerPos.y, occupantIdx);
+      }
+    }
+
+    function nextLevel() {
+      const nextIndex = currentWorkingLevelIndex + 1;
+      if (nextIndex < defaultLevels.levels.length) {
+        goLevel(nextIndex);
+      } else {
+        goLevel(0);
+      }
+    }
+
+    function prevLevel() {
+      const prevIndex = currentWorkingLevelIndex - 1;
+      if (prevIndex >= 0) {
+        goLevel(prevIndex);
+      } else {
+        goLevel(defaultLevels.levels.length - 1);
+      }
+    }
+
+    function goLevel(levelIndex) {
+      const safeIndex = Math.max(0, Math.min(defaultLevels.levels.length - 1, parseInt(levelIndex)));
+      currentWorkingLevelIndex = safeIndex;
+      loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+    }
+
+    function resetRuntimeToCurrentLevelSetup() {
+      const wasRunning = !!activeEngineExecutionTimerId;
+      if (wasRunning) {
+        clearInterval(activeEngineExecutionTimerId);
+        activeEngineExecutionTimerId = null;
+      }
+      const runBtn = document.getElementById("run-btn");
+      if (runBtn) {
+        runBtn.textContent = "Run Logic";
+        runBtn.classList.remove("btn-danger");
+      }
+      syncRuntimeStateFromCurrentLevelSpec();
+      renderCoreEngineGraphicsViewportPipeline();
+    }
+
+    function toggleEngineRun() {
+      const runBtn = document.getElementById("run-btn");
+      if (activeEngineExecutionTimerId) {
+        clearInterval(activeEngineExecutionTimerId);
+        activeEngineExecutionTimerId = null;
+        runBtn.textContent = "Run Logic";
+        runBtn.classList.remove("btn-danger");
+        resetRuntimeToCurrentLevelSetup();
+      } else {
+        syncRuntimeStateFromCurrentLevelSpec();
+        executeOneTimeStartupGraphPass();
+        renderCoreEngineGraphicsViewportPipeline();
+        activeEngineExecutionTimerId = setInterval(processEngineRuntimeTickLoopPulse, 250);
+        runBtn.textContent = "Stop Core";
+        runBtn.classList.add("btn-danger");
+      }
+    }
+
+    function resetEngineRuntime() {
+      if (activeEngineExecutionTimerId) {
+        clearInterval(activeEngineExecutionTimerId);
+        activeEngineExecutionTimerId = null;
+      }
+      const runBtn = document.getElementById("run-btn");
+      runBtn.textContent = "Run Logic";
+      runBtn.classList.remove("btn-danger");
+      resetRuntimeToCurrentLevelSetup();
+    }
+
+    function renderCoreEngineGraphicsViewportPipeline() {
+      const boundsWidth = canvasElement.parentElement.clientWidth;
+      canvasElement.width = boundsWidth;
+      canvasElement.height = boundsWidth;
+
+      canvasContext.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      const currentTargetLevelSpec = defaultLevels.levels[currentWorkingLevelIndex];
+      if (!currentTargetLevelSpec) return;
+
+      const [gridCols, gridRows] = currentTargetLevelSpec.gridSize;
+      const computedCellSizeWidth = canvasElement.width / gridCols;
+      const computedCellSizeHeight = canvasElement.height / gridRows;
+
+      for (let r = 0; r < gridRows; r++) {
+        for (let c = 0; c < gridCols; c++) {
+          canvasContext.strokeStyle = "#e2e8f0";
+          canvasContext.lineWidth = 1;
+          canvasContext.strokeRect(c * computedCellSizeWidth, r * computedCellSizeHeight, computedCellSizeWidth, computedCellSizeHeight);
+
+          const cellValIndexPointer = runtimeActiveWorkingGridWorld[r]?.[c];
+          if (cellValIndexPointer && cellValIndexPointer > 0) {
+            const configurationRefModel = boxReference[cellValIndexPointer];
+            if (configurationRefModel) {
+              canvasContext.fillStyle = configurationRefModel.col;
+              canvasContext.fillRect(c * computedCellSizeWidth + 1, r * computedCellSizeHeight + 1, computedCellSizeWidth - 2, computedCellSizeHeight - 2);
+
+              if (currentApplicationMode === "editor") {
+                canvasContext.fillStyle = "rgba(0,0,0,0.4)";
+                canvasContext.font = "bold 9px monospace";
+                canvasContext.fillText(cellValIndexPointer, c * computedCellSizeWidth + 4, r * computedCellSizeHeight + 12);
+              }
+            }
+          }
+        }
+      }
+
+      for (const playerPos of runtimePlayerPositions) {
+        const playerDef = boxReference[1];
+        if (!playerDef) continue;
+
+        canvasContext.fillStyle = playerDef.col;
+        canvasContext.fillRect(playerPos.x * computedCellSizeWidth + 1, playerPos.y * computedCellSizeHeight + 1, computedCellSizeWidth - 2, computedCellSizeHeight - 2);
+
+        if (currentApplicationMode === "editor") {
+          canvasContext.fillStyle = "rgba(0,0,0,0.4)";
+          canvasContext.font = "bold 9px monospace";
+          canvasContext.fillText("1", playerPos.x * computedCellSizeWidth + 4, playerPos.y * computedCellSizeHeight + 12);
+        }
+      }
+    }
+
+    
+    function handleCanvasGridInteractionClick(event) {
+      if (currentApplicationMode !== "editor") return;
+
+      const boundingClientRectBox = canvasElement.getBoundingClientRect();
+      const mouseClickXCoord = event.clientX - boundingClientRectBox.left;
+      const mouseClickYCoord = event.clientY - boundingClientRectBox.top;
+
+      const currentTargetLevelSpec = defaultLevels.levels[currentWorkingLevelIndex];
+      const [w, h] = currentTargetLevelSpec.gridSize;
+
+      const mapCellColumnTargetX = Math.floor(mouseClickXCoord / (boundingClientRectBox.width / w));
+      const mapCellRowTargetY = Math.floor(mouseClickYCoord / (boundingClientRectBox.height / h));
+
+      if (runtimeApi.validateCoordinateBoundaries(mapCellColumnTargetX, mapCellRowTargetY)) {
+        if (activeEditorWorkingTool === "paint") {
+          const targetedBrushDef = boxReference[activeEditorSelectedBrushIdx];
+          if (targetedBrushDef?.singleton === 1) {
+            for (let r = 0; r < h; r++) {
+              for (let c = 0; c < w; c++) {
+                if (currentTargetLevelSpec.world[r][c] === activeEditorSelectedBrushIdx) currentTargetLevelSpec.world[r][c] = 0;
+              }
+            }
+          }
+          currentTargetLevelSpec.world[mapCellRowTargetY][mapCellColumnTargetX] = activeEditorSelectedBrushIdx;
+        } else if (activeEditorWorkingTool === "erase") {
+          currentTargetLevelSpec.world[mapCellRowTargetY][mapCellColumnTargetX] = 0;
+        }
+
+        syncRuntimeStateFromCurrentLevelSpec();
+        synchronizeGlobalStateToRawJsonEditorView();
+        renderCoreEngineGraphicsViewportPipeline();
+      }
+    }
+
+    // HTML5 Drag & Drop Sub-System
+
+    function allowDrop(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+    }
+
+    function handleBlockDragStart(ev, sourceMode, lookupInstanceUuid, blockIde) {
+      internalDraggableTrackingObject = {
+        sourceMode: sourceMode,
+        instanceId: lookupInstanceUuid,
+        ide: parseInt(blockIde)
+      };
+      ev.dataTransfer.effectAllowed = "move";
+      ev.dataTransfer.setData("text/plain", blockIde.toString());
+    }
+
+    function handleWorkspaceDrop(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      document.getElementById("main-workspace").classList.remove("drag-over");
+      
+      if (!internalDraggableTrackingObject) return;
+      const currentLevelSpecsData = defaultLevels.levels[currentWorkingLevelIndex];
+      
+      if (internalDraggableTrackingObject.sourceMode === "palette") {
+        if (!verifyAllowedBlockBudgetCapacityAllocation(internalDraggableTrackingObject.ide, currentLevelSpecsData)) {
+          alert("Maximum block limit capacity for this level reached!");
+          return;
+        }
+        const newlyConstructedBlockNodeInstance = createBlankExecutionGraphNodeItemRecord(internalDraggableTrackingObject.ide);
+        runtimeExecutionProgramTrackGraph.push(newlyConstructedBlockNodeInstance);
+      } else if (internalDraggableTrackingObject.sourceMode === "workspace") {
+        const targetedBlockMemoryReferenceNode = findAndExtractBlockNodeInstanceFromTreeGraphByUuid(runtimeExecutionProgramTrackGraph, internalDraggableTrackingObject.instanceId);
+        if (targetedBlockMemoryReferenceNode) {
+          runtimeExecutionProgramTrackGraph.push(targetedBlockMemoryReferenceNode);
+        }
+      }
+      
+      rebuildVisualCodingWorkspaceDomTreeLayout();
+      rebuildAvailableInstructionsPaletteUIEngine();
+      internalDraggableTrackingObject = null;
+    }
+
+    function handleNestedSlotDropZone(ev, parentInstanceId) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      ev.currentTarget.classList.remove("drag-over");
+      
+      if (!internalDraggableTrackingObject) return;
+      const currentLevelSpecsData = defaultLevels.levels[currentWorkingLevelIndex];
+      
+      const parentNodeTargetElement = locateBlockNodeInstanceInsideTreeGraphByUuid(runtimeExecutionProgramTrackGraph, parentInstanceId);
+      if (!parentNodeTargetElement) return;
+      
+      if (internalDraggableTrackingObject.sourceMode === "palette") {
+        if (!verifyAllowedBlockBudgetCapacityAllocation(internalDraggableTrackingObject.ide, currentLevelSpecsData)) {
+          alert("Maximum instruction block budget capacity limit reached!");
+          return;
+        }
+        const newlyConstructedBlockNodeInstance = createBlankExecutionGraphNodeItemRecord(internalDraggableTrackingObject.ide);
+        parentNodeTargetElement.children.push(newlyConstructedBlockNodeInstance);
+      } else if (internalDraggableTrackingObject.sourceMode === "workspace") {
+        if (internalDraggableTrackingObject.instanceId === parentInstanceId) return;
+        if (isNodeParentOf(internalDraggableTrackingObject.instanceId, parentInstanceId)) {
+          alert("Recursive containment error: Cannot drag a parent block inside its own sub-slot container.");
+          return;
+        }
+        
+        const extractedTargetBlockNode = findAndExtractBlockNodeInstanceFromTreeGraphByUuid(runtimeExecutionProgramTrackGraph, internalDraggableTrackingObject.instanceId);
+        if (extractedTargetBlockNode) {
+          parentNodeTargetElement.children.push(extractedTargetBlockNode);
+        }
+      }
+      
+      rebuildVisualCodingWorkspaceDomTreeLayout();
+      rebuildAvailableInstructionsPaletteUIEngine();
+      internalDraggableTrackingObject = null;
+    }
+
+    function handlePaletteDrop(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (internalDraggableTrackingObject && internalDraggableTrackingObject.sourceMode === "workspace") {
+        findAndExtractBlockNodeInstanceFromTreeGraphByUuid(runtimeExecutionProgramTrackGraph, internalDraggableTrackingObject.instanceId);
+        rebuildVisualCodingWorkspaceDomTreeLayout();
+        rebuildAvailableInstructionsPaletteUIEngine();
+      }
+      internalDraggableTrackingObject = null;
+    }
+
+    function handleWorkspaceLeave(ev) {
+      if (ev.currentTarget === document.getElementById("main-workspace")) {
+        document.getElementById("main-workspace").classList.remove("drag-over");
+      }
+    }
+
+    function createBlankExecutionGraphNodeItemRecord(ide) {
+      const coreRegModel = engineBlocksRegistry[ide];
+      let initialDefaultSelectionValue = "";
+      if (coreRegModel.display.includes("selector")) {
+        initialDefaultSelectionValue = Object.keys(boxReference)[0] || "";
+      }
+      return {
+        uuid: generateCryptoStylePseudoRandomTokenString(),
+        ide: ide,
+        selectedValue: initialDefaultSelectionValue,
+        children: []
+      };
+    }
+
+    function verifyAllowedBlockBudgetCapacityAllocation(ide, levelSpecObj) {
+      const constraintRuleMapping = levelSpecObj.blocks.find(pair => pair[0] === ide);
+      if (!constraintRuleMapping) return false;
+      
+      const maxPermittedLimitAmount = constraintRuleMapping[1];
+      const currentActiveInstanceUtilizationCount = computeActiveBlockUtilizationFrequencyInstances(runtimeExecutionProgramTrackGraph, ide);
+      return (currentActiveInstanceUtilizationCount < maxPermittedLimitAmount);
+    }
+
+    function computeActiveBlockUtilizationFrequencyInstances(searchGraphNodeScopeArray, ide) {
+      let tallyMatches = 0;
+      for (let node of searchGraphNodeScopeArray) {
+        if (node.ide === ide) tallyMatches++;
+        if (node.children && node.children.length > 0) {
+          tallyMatches += computeActiveBlockUtilizationFrequencyInstances(node.children, ide);
+        }
+      }
+      return tallyMatches;
+    }
+
+    function locateBlockNodeInstanceInsideTreeGraphByUuid(searchGraphNodeScopeArray, lookupUuid) {
+      for (let node of searchGraphNodeScopeArray) {
+        if (node.uuid === lookupUuid) return node;
+        if (node.children && node.children.length > 0) {
+          const innerNestedMatchFound = locateBlockNodeInstanceInsideTreeGraphByUuid(node.children, lookupUuid);
+          if (innerNestedMatchFound) return innerNestedMatchFound;
+        }
+      }
+      return null;
+    }
+
+    function findAndExtractBlockNodeInstanceFromTreeGraphByUuid(searchGraphNodeScopeArray, lookupUuid) {
+      for (let i = 0; i < searchGraphNodeScopeArray.length; i++) {
+        if (searchGraphNodeScopeArray[i].uuid === lookupUuid) {
+          return searchGraphNodeScopeArray.splice(i, 1)[0];
+        }
+        if (searchGraphNodeScopeArray[i].children && searchGraphNodeScopeArray[i].children.length > 0) {
+          const innerExtractedFindResult = findAndExtractBlockNodeInstanceFromTreeGraphByUuid(searchGraphNodeScopeArray[i].children, lookupUuid);
+          if (innerExtractedFindResult) return innerExtractedFindResult;
+        }
+      }
+      return null;
+    }
+
+    function isNodeParentOf(parentUuid, childUuid) {
+      const parentNode = locateBlockNodeInstanceInsideTreeGraphByUuid(runtimeExecutionProgramTrackGraph, parentUuid);
+      if (!parentNode) return false;
+      return locateBlockNodeInstanceInsideTreeGraphByUuid(parentNode.children, childUuid) !== null;
+    }
+
+    function updateBlockNodeSelectorStateValueChange(instanceUuid, chosenValue) {
+      const matchNode = locateBlockNodeInstanceInsideTreeGraphByUuid(runtimeExecutionProgramTrackGraph, instanceUuid);
+      if (matchNode) matchNode.selectedValue = chosenValue;
+    }
+
+    function generateCryptoStylePseudoRandomTokenString() {
+      return "node-id-v2-" + Math.random().toString(36).substring(2, 15);
+    }
+
+    // Dom Engine Layout Assemblers
+    function rebuildVisualCodingWorkspaceDomTreeLayout() {
+      const workspaceRootNodeDomWrapper = document.getElementById("main-workspace");
+      const backupHintLabel = document.getElementById("workspace-hint");
+      
+      workspaceRootNodeDomWrapper.innerHTML = "";
+      workspaceRootNodeDomWrapper.appendChild(backupHintLabel);
+      
+      if (runtimeExecutionProgramTrackGraph.length === 0) {
+        backupHintLabel.style.display = "block";
+      } else {
+        backupHintLabel.style.display = "none";
+        for (let structuralNode of runtimeExecutionProgramTrackGraph) {
+          const generatedElementBlockHtmlNodeFrame = compileVisualBlockDomMarkupItemElement(structuralNode);
+          workspaceRootNodeDomWrapper.appendChild(generatedElementBlockHtmlNodeFrame);
+        }
+      }
+    }
+
+    function compileVisualBlockDomMarkupItemElement(nodeInstanceRecord) {
+      const coreBlueprint = engineBlocksRegistry[nodeInstanceRecord.ide];
+      
+      const elBlockFrameWrapper = document.createElement("div");
+      elBlockFrameWrapper.className = "block";
+      elBlockFrameWrapper.style.borderColor = coreBlueprint.col;
+      elBlockFrameWrapper.style.borderLeftWidth = "6px";
+      elBlockFrameWrapper.setAttribute("draggable", "true");
+      
+      // CRITICAL FIX: StopPropagation prevents nested node drag-starts from bubbling up and corrupting parent IDs
+      elBlockFrameWrapper.addEventListener("dragstart", (e) => {
+        e.stopPropagation();
+        handleBlockDragStart(e, "workspace", nodeInstanceRecord.uuid, nodeInstanceRecord.ide);
+      });
+      
+      const elHeaderRow = document.createElement("div");
+      elHeaderRow.className = "block-header";
+      const elTitleText = document.createElement("span");
+      elTitleText.textContent = coreBlueprint.name;
+      elHeaderRow.appendChild(elTitleText);
+      elBlockFrameWrapper.appendChild(elHeaderRow);
+      
+      if (coreBlueprint.display.includes("selector")) {
+        const elSelectorInput = document.createElement("select");
+        elSelectorInput.addEventListener("change", (e) => {
+          updateBlockNodeSelectorStateValueChange(nodeInstanceRecord.uuid, e.target.value);
+        });
+        
+        for (let keyIdx in boxReference) {
+          const opt = document.createElement("option");
+          opt.value = keyIdx;
+          opt.textContent = `[ID ${keyIdx}] ${boxReference[keyIdx].name}`;
+          if (nodeInstanceRecord.selectedValue.toString() === keyIdx.toString()) opt.selected = true;
+          elSelectorInput.appendChild(opt);
+        }
+        elBlockFrameWrapper.appendChild(elSelectorInput);
+      }
+      
+      if (coreBlueprint.display.includes("exec")) {
+        const elSlotLabel = document.createElement("div");
+        elSlotLabel.style.fontSize = "0.7rem";
+        elSlotLabel.style.fontWeight = "700";
+        elSlotLabel.style.textTransform = "uppercase";
+        elSlotLabel.style.color = "var(--muted)";
+        elSlotLabel.style.marginTop = "0.25rem";
+        elSlotLabel.textContent = "Execute Sequence Chain:";
+        elBlockFrameWrapper.appendChild(elSlotLabel);
+
+        const elInnerSlotDropZoneFrame = document.createElement("div");
+        elInnerSlotDropZoneFrame.className = "block-slot";
+        
+        elInnerSlotDropZoneFrame.addEventListener("dragover", (e) => {
+          allowDrop(e);
+          elInnerSlotDropZoneFrame.classList.add("drag-over");
+        });
+        elInnerSlotDropZoneFrame.addEventListener("dragenter", (e) => {
+          e.preventDefault();
+          elInnerSlotDropZoneFrame.classList.add("drag-over");
+        });
+        elInnerSlotDropZoneFrame.addEventListener("dragleave", () => {
+          elInnerSlotDropZoneFrame.classList.remove("drag-over");
+        });
+        elInnerSlotDropZoneFrame.addEventListener("drop", (e) => {
+          handleNestedSlotDropZone(e, nodeInstanceRecord.uuid);
+        });
+        
+        if (nodeInstanceRecord.children && nodeInstanceRecord.children.length > 0) {
+          for (let childNode of nodeInstanceRecord.children) {
+            elInnerSlotDropZoneFrame.appendChild(compileVisualBlockDomMarkupItemElement(childNode));
+          }
+        }
+        elBlockFrameWrapper.appendChild(elInnerSlotDropZoneFrame);
+      }
+      
+      return elBlockFrameWrapper;
+    }
+
+    function rebuildAvailableInstructionsPaletteUIEngine() {
+      const paletteContainerDomWrapper = document.getElementById("palette-blocks-container");
+      paletteContainerDomWrapper.innerHTML = "";
+      
+      const currentLevelSpecsData = defaultLevels.levels[currentWorkingLevelIndex];
+      if (!currentLevelSpecsData) return;
+      
+      for (let blockBudgetMappingPair of currentLevelSpecsData.blocks) {
+        const targetBlockIde = blockBudgetMappingPair[0];
+        const maximumAllowedLimitCount = blockBudgetMappingPair[1];
+        
+        const coreBlueprintDef = engineBlocksRegistry[targetBlockIde];
+        if (!coreBlueprintDef) continue;
+        
+        const activeUtilizedInstancesCount = computeActiveBlockUtilizationFrequencyInstances(runtimeExecutionProgramTrackGraph, targetBlockIde);
+        const capacityRemainingLeftCount = Math.max(0, maximumAllowedLimitCount - activeUtilizedInstancesCount);
+        
+        const elPaletteBlockItem = document.createElement("div");
+        elPaletteBlockItem.className = "block";
+        elPaletteBlockItem.style.borderColor = coreBlueprintDef.col;
+        elPaletteBlockItem.style.opacity = capacityRemainingLeftCount === 0 ? "0.4" : "1";
+        elPaletteBlockItem.setAttribute("draggable", capacityRemainingLeftCount > 0 ? "true" : "false");
+        
+        if (capacityRemainingLeftCount > 0) {
+          elPaletteBlockItem.style.cursor = "grab";
+          elPaletteBlockItem.addEventListener("dragstart", (e) => {
+            handleBlockDragStart(e, "palette", null, targetBlockIde);
+          });
+        } else {
+          elPaletteBlockItem.style.cursor = "not-allowed";
+        }
+        
+        const elHeaderRow = document.createElement("div");
+        elHeaderRow.className = "block-header";
+        
+        const elTitleText = document.createElement("span");
+        elTitleText.textContent = coreBlueprintDef.name;
+        elHeaderRow.appendChild(elTitleText);
+        
+        const elQtyBadge = document.createElement("span");
+        elQtyBadge.className = "block-qty";
+        elQtyBadge.textContent = `${activeUtilizedInstancesCount}/${maximumAllowedLimitCount}`;
+        elHeaderRow.appendChild(elQtyBadge);
+        
+        elPaletteBlockItem.appendChild(elHeaderRow);
+        paletteContainerDomWrapper.appendChild(elPaletteBlockItem);
+      }
+    }
+
+    // Editor Suite Controllers
+    function switchEditorTab(event, targetTabElementId) {
+      const tabsCollection = document.getElementsByClassName("tab-content");
+      for (let item of tabsCollection) item.classList.remove("active");
+      
+      const tabButtonsCollection = document.getElementsByClassName("tab-btn");
+      for (let btn of tabButtonsCollection) btn.classList.remove("active");
+      
+      document.getElementById(targetTabElementId).classList.add("active");
+      event.currentTarget.classList.add("active");
+      
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    
+    function repopulateEditorControlPanelUIRegisters() {
+      synchronizeGlobalStateToRawJsonEditorView();
+
+      const elSelectorDropdown = document.getElementById("editor-level-select");
+      elSelectorDropdown.innerHTML = "";
+      for (let i = 0; i < defaultLevels.levels.length; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = `Environment Level Map Target Frame: [Level ${i + 1}]`;
+        if (i === currentWorkingLevelIndex) opt.selected = true;
+        elSelectorDropdown.appendChild(opt);
+      }
+
+      const activeWorkingLevelSpecRecord = defaultLevels.levels[currentWorkingLevelIndex];
+      if (activeWorkingLevelSpecRecord) {
+        document.getElementById("level-width-input").value = activeWorkingLevelSpecRecord.gridSize[0];
+        document.getElementById("level-height-input").value = activeWorkingLevelSpecRecord.gridSize[1];
+
+        const containerAllowanceRowsWrapper = document.getElementById("editor-block-allowance-container");
+        containerAllowanceRowsWrapper.innerHTML = "";
+
+        for (let keyIde in engineBlocksRegistry) {
+          const engineInstructionModel = engineBlocksRegistry[keyIde];
+          const pairedValueRecord = activeWorkingLevelSpecRecord.blocks.find(p => p[0].toString() === keyIde.toString());
+          const constraintLimitAmount = pairedValueRecord ? pairedValueRecord[1] : 0;
+
+          const elRowLineWrapper = document.createElement("div");
+          elRowLineWrapper.className = "allowance-row";
+
+          const elLabelSpan = document.createElement("span");
+          elLabelSpan.textContent = engineInstructionModel.name;
+          elRowLineWrapper.appendChild(elLabelSpan);
+
+          const elInputConfigBox = document.createElement("input");
+          elInputConfigBox.type = "number";
+          elInputConfigBox.className = "allowance-input";
+          elInputConfigBox.min = "0";
+          elInputConfigBox.max = "99";
+          elInputConfigBox.value = constraintLimitAmount;
+          elInputConfigBox.addEventListener("change", (e) => {
+            updateLevelAllowedBlockLimitQuantityValue(parseInt(keyIde), parseInt(e.target.value));
+          });
+
+          elRowLineWrapper.appendChild(elInputConfigBox);
+          containerAllowanceRowsWrapper.appendChild(elRowLineWrapper);
+        }
+      }
+
+      const containerBrushRowsWrapper = document.getElementById("editor-brush-container");
+      containerBrushRowsWrapper.innerHTML = "";
+      for (let keyIdx in boxReference) {
+        const boxModelRef = boxReference[keyIdx];
+        const elBrushItemCard = document.createElement("div");
+        elBrushItemCard.className = `brush-item ${activeEditorSelectedBrushIdx.toString() === keyIdx.toString() ? "active" : ""}`;
+        elBrushItemCard.addEventListener("click", () => {
+          activeEditorSelectedBrushIdx = parseInt(keyIdx);
+          repopulateEditorControlPanelUIRegisters();
+        });
+
+        const elColorDot = document.createElement("div");
+        elColorDot.className = "box-color-preview";
+        elColorDot.style.background = boxModelRef.col;
+        elBrushItemCard.appendChild(elColorDot);
+
+        const elLabelNameSpan = document.createElement("span");
+        elLabelNameSpan.textContent = `(${boxModelRef.idx}) ${boxModelRef.name}`;
+        elBrushItemCard.appendChild(elLabelNameSpan);
+
+        containerBrushRowsWrapper.appendChild(elBrushItemCard);
+      }
+
+      const containerBoxesListWrapper = document.getElementById("editor-boxes-list-container");
+      containerBoxesListWrapper.innerHTML = "";
+      for (let keyIdx in boxReference) {
+        const boxModelRef = boxReference[keyIdx];
+
+        const elBoxCardFrame = document.createElement("div");
+        elBoxCardFrame.className = "box-card";
+
+        const elBoxInfoGroup = document.createElement("div");
+        elBoxInfoGroup.className = "box-info";
+
+        const elColorPreviewSquare = document.createElement("div");
+        elColorPreviewSquare.className = "box-color-preview";
+        elColorPreviewSquare.style.background = boxModelRef.col;
+        elBoxInfoGroup.appendChild(elColorPreviewSquare);
+
+        const elMetadataTextSpan = document.createElement("div");
+        elMetadataTextSpan.innerHTML = `<strong>[Index ID: ${boxModelRef.idx}] ${boxModelRef.name}</strong><br>
+        <small style="color:var(--muted)">Block Type: ${boxModelRef.blockType} | Gravity Physics: ${boxModelRef.gravity} | Singleton Restriction: ${boxModelRef.singleton} | Tick Hook: ${boxModelRef.onTick ? "Enabled" : "Disabled"} | Collide Hook: ${boxModelRef.onCollide ? "Enabled" : "Disabled"}</small>`;
+        elBoxInfoGroup.appendChild(elMetadataTextSpan);
+        elBoxCardFrame.appendChild(elBoxInfoGroup);
+
+        const elActionsContainer = document.createElement("div");
+        if (boxModelRef.builtIn) {
+          const elLockedBadge = document.createElement("span");
+          elLockedBadge.className = "level-badge";
+          elLockedBadge.textContent = "Locked";
+          elActionsContainer.appendChild(elLockedBadge);
+        } else {
+          const elEditPropertiesBtn = document.createElement("button");
+          elEditPropertiesBtn.className = "btn";
+          elEditPropertiesBtn.textContent = "Modify Parameters Schema Package";
+          elEditPropertiesBtn.style.padding = "0.3rem 0.6rem";
+          elEditPropertiesBtn.addEventListener("click", () => openBoxConfigModal(boxModelRef.idx));
+          elActionsContainer.appendChild(elEditPropertiesBtn);
+        }
+
+        elBoxCardFrame.appendChild(elActionsContainer);
+        containerBoxesListWrapper.appendChild(elBoxCardFrame);
+      }
+    }
+
+    function setEditorTool(toolModeToken) {
+      activeEditorWorkingTool = toolModeToken;
+      document.getElementById("tool-paint").classList.toggle("active", toolModeToken === "paint");
+      document.getElementById("tool-erase").classList.toggle("active", toolModeToken === "erase");
+    }
+
+    function loadEditorLevelIndex(valIndex) {
+      currentWorkingLevelIndex = parseInt(valIndex);
+      loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    function createNewLevelManifest() {
+      const newlyFormedLevelSpecBlueprintStructure = {
+        gridSize: [16, 16],
+        world: Array(16).fill(null).map(() => Array(16).fill(0)),
+        blocks: [
+          [1, 5], [2, 5], [3, 2], [6, 1]
+        ]
+      };
+      
+      newlyFormedLevelSpecBlueprintStructure.world[13][2] = 1;
+      newlyFormedLevelSpecBlueprintStructure.world[3][13] = 2;
+      for (let c = 0; c < 16; c++) newlyFormedLevelSpecBlueprintStructure.world[14][c] = 3;
+      
+      defaultLevels.levels.push(newlyFormedLevelSpecBlueprintStructure);
+      currentWorkingLevelIndex = defaultLevels.levels.length - 1;
+      
+      loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+      repopulateEditorControlPanelUIRegisters();
+    }
+
+    function updateLevelDimensions() {
+      const inputWidthVal = parseInt(document.getElementById("level-width-input").value) || 10;
+      const inputHeightVal = parseInt(document.getElementById("level-height-input").value) || 10;
+      
+      const targetWorkingLevelSpecObj = defaultLevels.levels[currentWorkingLevelIndex];
+      if (!targetWorkingLevelSpecObj) return;
+      
+      targetWorkingLevelSpecObj.gridSize = [inputWidthVal, inputHeightVal];
+      
+      const newWorldLayoutMatrixGrid = [];
+      for (let r = 0; r < inputHeightVal; r++) {
+        const newRowArrayCellsList = [];
+        for (let c = 0; c < inputWidthVal; c++) {
+          const legacyCellContentsValuePointer = targetWorkingLevelSpecObj.world[r]?.[c];
+          newRowArrayCellsList.push(legacyCellContentsValuePointer !== undefined ? legacyCellContentsValuePointer : 0);
+        }
+        newWorldLayoutMatrixGrid.push(newRowArrayCellsList);
+      }
+      
+      targetWorkingLevelSpecObj.world = newWorldLayoutMatrixGrid;
+      syncRuntimeStateFromCurrentLevelSpec();
+      
+      synchronizeGlobalStateToRawJsonEditorView();
+      renderCoreEngineGraphicsViewportPipeline();
+    }
+
+    function updateLevelAllowedBlockLimitQuantityValue(blockIde, numericAmountValue) {
+      const targetWorkingLevelSpecObj = defaultLevels.levels[currentWorkingLevelIndex];
+      if (!targetWorkingLevelSpecObj) return;
+      
+      const indexPairPositionIndex = targetWorkingLevelSpecObj.blocks.findIndex(p => p[0].toString() === blockIde.toString());
+      if (numericAmountValue > 0) {
+        if (indexPairPositionIndex !== -1) {
+          targetWorkingLevelSpecObj.blocks[indexPairPositionIndex][1] = numericAmountValue;
+        } else {
+          targetWorkingLevelSpecObj.blocks.push([blockIde, numericAmountValue]);
+        }
+      } else {
+        if (indexPairPositionIndex !== -1) targetWorkingLevelSpecObj.blocks.splice(indexPairPositionIndex, 1);
+      }
+      
+      synchronizeGlobalStateToRawJsonEditorView();
+      rebuildAvailableInstructionsPaletteUIEngine();
+    }
+
+    
+    function openBoxConfigModal(boxIdxKey = null) {
+      const modalElementFrameOverlay = document.getElementById("box-modal");
+      modalElementFrameOverlay.classList.add("active");
+
+      if (boxIdxKey !== null) {
+        const activeBoxModelTargetObj = boxReference[boxIdxKey];
+        if (!activeBoxModelTargetObj || activeBoxModelTargetObj.builtIn) {
+          alert("Built-in boxes are locked. Only custom boxes can be modified.");
+          closeBoxConfigModal();
+          return;
+        }
+
+        document.getElementById("modal-title-text").textContent = `Edit Entity [ID ${boxIdxKey}] Schema Config`;
+
+        document.getElementById("modal-box-idx").value = boxIdxKey;
+        document.getElementById("modal-box-name").value = activeBoxModelTargetObj.name;
+        document.getElementById("modal-box-col").value = activeBoxModelTargetObj.col;
+        document.getElementById("modal-box-id-idx").value = activeBoxModelTargetObj.idx;
+        document.getElementById("modal-box-id-idx").disabled = true;
+        document.getElementById("modal-box-singleton").value = activeBoxModelTargetObj.singleton.toString();
+        document.getElementById("modal-box-gravity").value = activeBoxModelTargetObj.gravity.toString();
+        document.getElementById("modal-box-blocktype").value = String(activeBoxModelTargetObj.blockType ?? 2);
+
+        if (activeBoxModelTargetObj.onTick) {
+          document.getElementById("modal-box-ontick-toggle").checked = true;
+          document.getElementById("modal-tick-code-wrapper").style.display = "block";
+          document.getElementById("modal-box-ontick-code").value = activeBoxModelTargetObj.onTick;
+        } else {
+          document.getElementById("modal-box-ontick-toggle").checked = false;
+          document.getElementById("modal-tick-code-wrapper").style.display = "none";
+          document.getElementById("modal-box-ontick-code").value = "";
+        }
+
+        if (activeBoxModelTargetObj.onCollide) {
+          document.getElementById("modal-box-oncollide-toggle").checked = true;
+          document.getElementById("modal-collide-code-wrapper").style.display = "block";
+          document.getElementById("modal-box-oncollide-code").value = activeBoxModelTargetObj.onCollide;
+        } else {
+          document.getElementById("modal-box-oncollide-toggle").checked = false;
+          document.getElementById("modal-collide-code-wrapper").style.display = "none";
+          document.getElementById("modal-box-oncollide-code").value = "";
+        }
+
+        if (activeBoxModelTargetObj.availState && activeBoxModelTargetObj.availState.length > 0) {
+          const ruleObj = activeBoxModelTargetObj.availState[0];
+          document.getElementById("modal-state-name").value = ruleObj.name;
+          if (ruleObj.range) {
+            document.getElementById("modal-state-type").value = "range";
+            toggleStateConstraintUI("range");
+            document.getElementById("modal-state-min").value = ruleObj.range[0];
+            document.getElementById("modal-state-max").value = ruleObj.range[1];
+          } else if (ruleObj.cRange) {
+            document.getElementById("modal-state-type").value = "crange";
+            toggleStateConstraintUI("crange");
+            document.getElementById("modal-state-crange-tokens").value = ruleObj.cRange.map(v => typeof v === 'string' ? `"${v}"` : v).join(", ");
+          }
+        } else {
+          resetBoxModalStateSchemaFormFields();
+        }
+      } else {
+        document.getElementById("modal-title-text").textContent = "Register Fresh Custom Game Box Entity";
+        document.getElementById("modal-box-idx").value = "";
+        document.getElementById("modal-box-name").value = "";
+        document.getElementById("modal-box-col").value = "#9b59b6";
+
+        const keyIndicesListIntsArray = Object.keys(boxReference).map(k => parseInt(k));
+        const maxCurrentIndexInt = keyIndicesListIntsArray.length > 0 ? Math.max(...keyIndicesListIntsArray) : 3;
+
+        document.getElementById("modal-box-id-idx").value = maxCurrentIndexInt + 1;
+        document.getElementById("modal-box-id-idx").disabled = false;
+        document.getElementById("modal-box-singleton").value = "0";
+        document.getElementById("modal-box-gravity").value = "0";
+        document.getElementById("modal-box-blocktype").value = "2";
+        document.getElementById("modal-box-ontick-toggle").checked = false;
+        document.getElementById("modal-tick-code-wrapper").style.display = "none";
+        document.getElementById("modal-box-ontick-code").value = "";
+        document.getElementById("modal-box-oncollide-toggle").checked = false;
+        document.getElementById("modal-collide-code-wrapper").style.display = "none";
+        document.getElementById("modal-box-oncollide-code").value = "";
+
+        resetBoxModalStateSchemaFormFields();
+      }
+    }
+
+    function resetBoxModalStateSchemaFormFields() {
+      document.getElementById("modal-state-name").value = "";
+      document.getElementById("modal-state-type").value = "none";
+      toggleStateConstraintUI("none");
+      document.getElementById("modal-state-min").value = "0";
+      document.getElementById("modal-state-max").value = "100";
+      document.getElementById("modal-state-crange-tokens").value = "";
+    }
+
+    function closeBoxConfigModal() {
+      document.getElementById("box-modal").classList.remove("active");
+    }
+
+    function toggleModalTickCodeArea(isChecked) {
+      document.getElementById("modal-tick-code-wrapper").style.display = isChecked ? "block" : "none";
+    }
+
+    function toggleModalCollideCodeArea(isChecked) {
+      document.getElementById("modal-collide-code-wrapper").style.display = isChecked ? "block" : "none";
+    }
+
+    function commitBoxConfigurationForm() {
+      const uniqueNumericMapIdIdx = parseInt(document.getElementById("modal-box-id-idx").value);
+      if (!uniqueNumericMapIdIdx || uniqueNumericMapIdIdx <= 0) {
+        alert("A valid unique ID is required.");
+        return;
+      }
+
+      const existingBox = boxReference[uniqueNumericMapIdIdx];
+      if (existingBox?.builtIn) {
+        alert("Built-in boxes cannot be modified.");
+        return;
+      }
+
+      const labelStringName = document.getElementById("modal-box-name").value.trim() || `Custom Box Entity Type: ${uniqueNumericMapIdIdx}`;
+      const colorSelectionHex = document.getElementById("modal-box-col").value;
+      const isSingletonBitFlag = parseInt(document.getElementById("modal-box-singleton").value);
+      const isGravityAffectedBitFlag = parseInt(document.getElementById("modal-box-gravity").value);
+      const blockTypeValue = parseInt(document.getElementById("modal-box-blocktype").value) || 2;
+
+      let verifiedOnTickExecutableCodeBlockPayload = null;
+      if (document.getElementById("modal-box-ontick-toggle").checked) {
+        verifiedOnTickExecutableCodeBlockPayload = document.getElementById("modal-box-ontick-code").value;
+      }
+
+      let verifiedOnCollideExecutableCodeBlockPayload = null;
+      if (document.getElementById("modal-box-oncollide-toggle").checked) {
+        verifiedOnCollideExecutableCodeBlockPayload = document.getElementById("modal-box-oncollide-code").value;
+      }
+
+      const declaredStateFieldVarName = document.getElementById("modal-state-name").value.trim();
+      const declaredRuleConstraintTypeMode = document.getElementById("modal-state-type").value;
+      let computedAvailStateSchemaArray = [];
+
+      if (declaredStateFieldVarName.length > 0 && declaredRuleConstraintTypeMode !== "none") {
+        const compiledRuleSchemaDescriptorObj = { name: declaredStateFieldVarName };
+        if (declaredRuleConstraintTypeMode === "range") {
+          const floorMinNum = parseFloat(document.getElementById("modal-state-min").value) || 0;
+          const ceilingMaxNum = parseFloat(document.getElementById("modal-state-max").value) || 100;
+          compiledRuleSchemaDescriptorObj.range = [floorMinNum, ceilingMaxNum];
+        } else if (declaredRuleConstraintTypeMode === "crange") {
+          const rawTokensCsvStringLine = document.getElementById("modal-state-crange-tokens").value;
+          try {
+            const jsonStandardizedArrayFormatString = `[ ${rawTokensCsvStringLine} ]`;
+            compiledRuleSchemaDescriptorObj.cRange = JSON.parse(jsonStandardizedArrayFormatString);
+          } catch (e) {
+            alert("Error parsing Enum values array string format.");
+            return;
+          }
+        }
+        computedAvailStateSchemaArray.push(compiledRuleSchemaDescriptorObj);
+      }
+
+      const historicalBaseStateSnapshot = existingBox?.state || {};
+
+      boxReference[uniqueNumericMapIdIdx] = {
+        name: labelStringName,
+        idx: uniqueNumericMapIdIdx,
+        singleton: isSingletonBitFlag,
+        col: colorSelectionHex,
+        gravity: isGravityAffectedBitFlag,
+        blockType: blockTypeValue,
+        builtIn: false,
+        onTick: verifiedOnTickExecutableCodeBlockPayload,
+        onCollide: verifiedOnCollideExecutableCodeBlockPayload,
+        state: historicalBaseStateSnapshot,
+        availState: computedAvailStateSchemaArray
+      };
+
+      closeBoxConfigModal();
+      repopulateEditorControlPanelUIRegisters();
+      renderCoreEngineGraphicsViewportPipeline();
+    }
+
+    function synchronizeGlobalStateToRawJsonEditorView() {
+      const outputTargetTextareaElementDom = document.getElementById("json-raw-editor");
+      if (outputTargetTextareaElementDom) {
+        outputTargetTextareaElementDom.value = JSON.stringify(defaultLevels, null, 2);
+      }
+    }
+
+    function saveRawJsonState() {
+      const sourceRawTextareaInputCodeString = document.getElementById("json-raw-editor").value;
+      try {
+        const validatedParsedDatabaseManifestObject = JSON.parse(sourceRawTextareaInputCodeString);
+        if (!validatedParsedDatabaseManifestObject.levels || !Array.isArray(validatedParsedDatabaseManifestObject.levels)) {
+          throw new Error("Invalid format matrix structure.");
+        }
+
+        if (currentApplicationMode === "editor") {
+          editorLevelsData = validatedParsedDatabaseManifestObject;
+          setActiveProject("editor");
+        } else {
+          playLevelsData = validatedParsedDatabaseManifestObject;
+          setActiveProject("play");
+        }
+
+        syncRuntimeStateFromCurrentLevelSpec();
+        loadLevelSpecificationTopologyIntoWorkingMemory(currentWorkingLevelIndex, { preserveWorkspace: true });
+        repopulateEditorControlPanelUIRegisters();
+        alert("JSON Database States Successfully Synchronized!");
+      } catch (err) {
+        alert(`Failed to parse config schema manifest changes: ${err.message}`);
+      }
+    }
+
+    function exportRawJsonBackup() {
+      const payload = MoveItCodec.encodeJSON({
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        data: defaultLevels
+      });
+      return payload;
+    }
+  </script>
+</body>
+</html>
